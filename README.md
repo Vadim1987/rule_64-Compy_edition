@@ -1,159 +1,266 @@
-# 1D Cellular Automaton Lab (Rule 64)
+## Rule 64 – 1D Cellular Automaton Lab
 
-This is a **teaching example** for Compy:  
-a simple 1D cellular automaton with:
+This small project demonstrates how simple rules 
+can create complex patterns. It is designed as 
+a learning tool for children (and curious adults) 
+to explore how tiny mathematical universes 
+evolve over time.
 
-- live animation
-- step-by-step mode
-- rule presets
-- center / random seed
-- on-screen HUD with the current rule table
+The example shows how to:
+- store the entire world in one state table
+- update it step-by-step in a predictable way
+- draw a new row at each step
+- switch rules interactively in real time
 
-The base rule is **Rule 64**, but you can explore other rules interactively.
-
----
-
-## What is a 1D Cellular Automaton?
-
-We have:
-
-- a single **row** of cells
-- each cell is either **0** (black) or **1** (white)
-- time goes in **steps** (generations)
-- each new row is computed from the **row above**:
-- each cell looks at **3 cells**: left, center, right
-- that pattern (e.g. `110`) is mapped to a new value (0 or 1)
-- the mapping is defined by a **rule number** from 0 to 255
-
-Example for **Rule 64**:
-
-```text
-Rule 64 in binary: 01000000
-
-Patterns (from 111 to 000):
-
-111 -> 0
-110 -> 1   <-- only this pattern gives 1
-101 -> 0
-100 -> 0
-011 -> 0
-010 -> 0
-001 -> 0
-000 -> 0
-
-The program computes these mappings automatically and shows them on screen.
+Cellular automata are perfect for learning programming:
+the rules are tiny, the behavior is beautiful, 
+and the code is clean.
 
 ⸻
 
-## Controls
+## 1. Files and Purpose
 
-When the program is running:
-	-	SPACE – pause / resume
-	-	N – single step (works only when paused)
-	-	R – reset with the current rule
-	-	UP – increase rule number (RULE = RULE + 1 mod 256)
-	-	DOWN – decrease rule number (RULE = RULE - 1 mod 256)
-	-	S – toggle seed mode:
-	-	CENTER – single white cell in the middle
-	-	RANDOM – noisy first row (random 0/1)
-	-	1–9 – load rule presets:
+The project consists of a single file:
+- main.lua — contains the state, rule decoding, 
+update logic, drawing, and input.
 
-Key	Rule
-1	30
-2	60
-3	90
-4	110
-5	184
-6	22
-7	50
-8	126
-9	250
+Even though it’s one file, the program is split into 
+clear sections:
+- constants
+- state
+- drawing helpers
+- simulation rules
+- update loop
+- keyboard actions
 
 
 
 ⸻
 
-On-screen HUD
+## 2. Constants
 
-The HUD in the top-left corner shows:
-	-	Rule: N – current rule number (0–255)
-	-	Row: K – current generation (1..HEIGHT)
-	-	State: RUNNING / PAUSED
-	-	Seed: CENTER / RANDOM
-	-	Short help with the main keys
+These values describe the size of the universe and the color palette:
 
-On the top-right side you see the rule table:
+PIX  = 6
+WIDTH  = 100
+HEIGHT = 60
+GRID_OFFSET_Y = 70
 
-Patterns:
-111 -> x
-110 -> x
-...
-000 -> x
+COLOR_BG = Color[Color.black]
+COLOR_FG = Color[Color.white + Color.bright]
+COLOR_ON = Color[Color.white + Color.bright]
+COLOR_OFF = Color[Color.black]
 
-This directly shows how the current rule interprets each 3-cell pattern.
+Cells are drawn as squares of size PIX.
+The universe is 100 cells wide and 60 rows tall.
+
+GRID_OFFSET_Y moves the simulation down,
+so the HUD text does not overlap with the picture.
 
 ⸻
 
-Main Ideas in the Code
+## 3. State Table
 
-State
+All game data is kept inside one table:
 
-We keep all state in table S:
-
-S = {
-  row = 1,         -- current generation index
-  grid = {},       -- 2D array: [y][x] = 0 or 1
-  paused = false,  -- running or paused
-  random = false   -- seed mode: false=center, true=random
+State = {
+  row = 1,
+  grid = { },
+  paused = false,
+  random = false
 }
 
-We also track:
-	-	RULE – current rule number
-	-	RULEMAP – mapping from pattern code 0..7 to 0/1
+- row — which row is currently being filled
+- grid — the entire universe
+- paused — whether the simulation is stopped
+- random — whether the first row is random or centered
 
-Rule decoding
-
-make_rule() converts the number RULE into a lookup table:
-
-RULEMAP[n] = 0 or 1, where n = 0..7
-
-Each n corresponds to a pattern:
-
-n = 7 -> 111
-n = 6 -> 110
-...
-n = 0 -> 000
-
-Evolution
-
-For each new row:
-	-	we read the previous row row
-	-	for each x we get l, c, r (left, center, right)
-	-	we compute a code 0..7
-	-	we set the new cell from RULEMAP[code]
-
-This is all done in step().
-
-Drawing
-	-	draw_grid() draws black/white pixels for all cells
-	-	draw_status() draws the text HUD (rule, row, state, seed, help)
-	-	draw_rule_info() shows the rule table 111 -> 0 etc.
+Keeping everything inside one state makes the program predictable and easy to debug.
 
 ⸻
 
-How to Use This as a Teaching Example
+## 4. Rule System
 
-You can:
-	1.	Start with Rule 64 and a center seed.
-    2.	Switch to random seed (S) and compare:
-	    -	how the same rule behaves with different starting conditions?
-	3.	Try famous rules:
-	    -	Rule 30 (chaotic)
-	    -   Rule 90 (triangle patterns)
-	    -	Rule 110 (complex, almost “life-like”)
-	4.	Pause (SPACE), then step with N:
-		-   let students watch how each line depends on the line above.
-	5.	Look at the right rule table:
-	    -   for a chosen rule, highlight which patterns give 1,
-	    -	then show how that affects the overall shape.
+A rule number (0–255) defines how each cell behaves based on its neighbors.
+
+rule = 64
+rule_map = {}
+
+The lookup table is built like this:
+
+function make_rule()
+  rule_map = {}
+  for n = 0, 7 do
+    local bit = math.floor(rule / (2 ^ n)) % 2
+    rule_map[n] = bit
+  end
+end
+
+Each pattern (111, 110, 101, …) is encoded as a number 0–7,
+so the rule becomes a tiny dictionary.
+
+⸻
+
+## 5. Drawing Helpers
+
+Each cell is drawn by the Pixel function:
+
+function Pixel(x, y)
+  gfx.rectangle(
+    "fill",
+    (x - 1) * PIX,
+    (y - 1) * PIX + GRID_OFFSET_Y,
+    PIX, PIX
+  )
+end
+
+The displacement by GRID_OFFSET_Y keeps the HUD area clear.
+
+⸻
+
+## 6. Seeding & Resetting
+
+The first row is created either:
+	•	as one bright pixel in the center, or
+	•	as random noise, if the user toggles it.
+
+function seed_row()
+  for x = 1, WIDTH do
+    if State.random then
+      State.grid[1][x] = math.random(0, 1)
+    else
+      State.grid[1][x] = 0
+    end
+  end
+  if not State.random then
+    local center = math.floor(WIDTH / 2)
+    State.grid[1][center] = 1
+  end
+  State.row = 1
+end
+
+Resetting simply rebuilds the rule and clears the world:
+
+function init()
+  make_rule()
+  clear_grid()
+  seed_row()
+  State.paused = false
+end
+
+
+⸻
+
+## 7. Simulation Step
+
+Each new row is computed from the previous one:
+
+function step()
+  if State.row >= HEIGHT then return end
+  local row = State.row
+  local nxt = row + 1
+
+  for x = 1, WIDTH do
+    local l = State.grid[row][x - 1] or 0
+    local c = State.grid[row][x]     or 0
+    local r = State.grid[row][x + 1] or 0
+    local code = l * 4 + c * 2 + r
+    State.grid[nxt][x] = rule_map[code]
+  end
+
+  State.row = nxt
+end
+
+Left, center, and right neighbors form a 3-bit code.
+The rule decides the next value.
+
+This is the heart of the automaton.
+
+⸻
+
+## 8. Drawing the Universe
+
+function draw_grid()
+  for y = 1, HEIGHT do
+    for x = 1, WIDTH do
+      local v = State.grid[y][x]
+      gfx.setColor((v == 1) and COLOR_ON or COLOR_OFF)
+      Pixel(x, y)
+    end
+  end
+end
+
+HUD (status text) appears at the top:
+
+gfx.print("Rule: " .. rule, 4, 4)
+gfx.print("Row: " .. State.row, 4, 16)
+
+Controls are shown at the bottom:
+
+gfx.print("SPACE: pause  R: reset  N: step", 4, y)
+gfx.print("UP/DOWN: rule  S: seed  1-9: presets", 4, y+12)
+
+
+⸻
+
+## 9. Update Loop
+
+The simulation advances automatically unless paused:
+
+function love.update()
+  if not State.paused then
+    step()
+  end
+end
+
+
+⸻
+
+## 10. Input and Control
+
+Input is handled “2048-style” —
+a clean table of actions instead of a long if-chain.
+
+KeyPress.space = key_toggle_pause
+KeyPress.r     = key_reset
+KeyPress.up    = key_rule_up
+KeyPress.down  = key_rule_down
+KeyPress.s     = key_toggle_seed
+KeyPress.n     = key_step_once
+
+Preset rules 1–9 are handled separately:
+
+function apply_preset_rule(key)
+  local preset = RULE_PRESET[key]
+  if preset then
+    rule = preset
+    init()
+  end
+end
+
+Final dispatcher:
+
+function love.keypressed(key)
+  local handler = KeyPress[key]
+  if handler then handler(); return end
+  apply_preset_rule(key)
+end
+
+This makes adding new commands trivial.
+
+⸻
+
+## 11. What to Try Next
+- Experiment with Rule 30 or Rule 110
+- Change PIX to zoom in/out
+- Switch between center seed and random seed
+- Add wrap-around edges
+- Turn this into a 2D cellular automaton
+- Combine multiple rules on the same screen
+- Add colors depending on pattern history
+
+This lab is meant to encourage creativity:
+simple rules → surprising behavior.
+
+
 
