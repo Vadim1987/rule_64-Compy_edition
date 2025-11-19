@@ -1,30 +1,30 @@
 -- 1D cellular automaton lab (Rule 64)
 
-PIX = 6 -- cell size in pixels
-WIDTH = 100 -- cells horizontally
-HEIGHT = 60 -- cells vertically
-GRID_OFFSET_Y = 70  -- top margin for HUD
+PIX = 6
+WIDTH = 100
+HEIGHT = 60
+GRID_OFFSET_Y = 70
 
-rule = 64 -- default rule
+rule = 64
 
 State = {
   row = 1,
-  grid = { },
+  grid = {},
   paused = false,
-  random = false -- center seed by default
+  random = false
 }
 
-rule_map = { }
+rule_map = {}
 
 RULE_PRESET = {
-  ["1"] = 30, 
-  ["2"] = 60, 
+  ["1"] = 30,
+  ["2"] = 60,
   ["3"] = 90,
-  ["4"] = 110, 
-  ["5"] = 184, 
+  ["4"] = 110,
+  ["5"] = 184,
   ["6"] = 22,
-  ["7"] = 50, 
-  ["8"] = 126, 
+  ["7"] = 50,
+  ["8"] = 126,
   ["9"] = 250
 }
 
@@ -46,42 +46,46 @@ function Pixel(x, y)
   )
 end
 
--- build rule lookup table from RULE number
+-- pure builder for rule map
 function make_rule()
-  rule_map = { }
+  local map = { }
   for n = 0, 7 do
     local bit = math.floor(rule / (2 ^ n)) % 2
-    rule_map[n] = bit
+    map[n] = bit
   end
+  return map
 end
 
--- prepare empty grid
-function clear_grid()
-  State.grid = { }
+-- pure builder for empty grid
+function make_grid()
+  local grid = { }
   for y = 1, HEIGHT do
-    State.grid[y] = { }
+    grid[y] = { }
   end
+  return grid
 end
 
 -- seed first row: center dot or random noise
 function seed_row()
+  local grid = State.grid
   for x = 1, WIDTH do
     if State.random then
-      State.grid[1][x] = math.random(0, 1)
+      grid[1][x] = math.random(0, 1)
     else
-      State.grid[1][x] = 0 end
+      grid[1][x] = 0
+    end
   end
   if not State.random then
     local center = math.floor(WIDTH / 2)
-    State.grid[1][center] = 1
+    grid[1][center] = 1
   end
   State.row = 1
 end
 
 -- full reset
 function init()
-  make_rule()
-  clear_grid()
+  rule_map = make_rule()
+  State.grid = make_grid()
   seed_row()
   State.paused = false
 end
@@ -91,21 +95,24 @@ function step()
   if State.row >= HEIGHT then return end
   local row = State.row
   local nxt = row + 1
+  local grid = State.grid
+  local map = rule_map
   for x = 1, WIDTH do
-    local l = State.grid[row][x - 1] or 0
-    local c = State.grid[row][x] or 0
-    local r = State.grid[row][x + 1] or 0
+    local l = grid[row][x - 1] or 0
+    local c = grid[row][x] or 0
+    local r = grid[row][x + 1] or 0
     local code = l * 4 + c * 2 + r
-    State.grid[nxt][x] = rule_map[code]
+    grid[nxt][x] = map[code]
   end
   State.row = nxt
 end
 
 -- draw entire grid
 function draw_grid()
+  local grid = State.grid
   for y = 1, HEIGHT do
     for x = 1, WIDTH do
-      local v = State.grid[y][x]
+      local v = grid[y][x]
       if v == 1 then
         gfx.setColor(COLOR_ON)
       else
@@ -118,7 +125,7 @@ end
 
 -- draw HUD: rule, row, state, seed
 function draw_status()
-  gfx.setColor(COLOR_ON)
+  gfx.setColor(COLOR_FG)
   gfx.print("Rule: " .. rule, 4, 4)
   gfx.print("Row: " .. State.row, 4, 16)
   if State.paused then
@@ -136,7 +143,7 @@ end
 -- draw controls help
 function draw_help()
   local y = GRID_OFFSET_Y + HEIGHT * PIX + 4
-  gfx.setColor(COLOR_ON)
+  gfx.setColor(COLOR_FG)
   gfx.print("SPACE: pause  R: reset  N: step", 4, y)
   gfx.print("UP/DOWN: rule  S: seed  1-9: presets", 4, y + 12)
 end
@@ -150,25 +157,16 @@ end
 
 -- main draw
 function love.draw()
-  gfx.clear(
-  COLOR_BG[1],
-  COLOR_BG[2], 
-  COLOR_BG[3]
-)
+  gfx.clear(COLOR_BG[1], COLOR_BG[2], COLOR_BG[3])
   draw_grid()
   draw_status()
   draw_help()
 end
 
--- key actions (functions as values, в духе 2048-ревью)
 KeyPress = {}
 
 function key_toggle_pause()
   State.paused = not State.paused
-end
-
-function key_reset()
-  init()
 end
 
 function key_rule_up()
@@ -194,21 +192,20 @@ end
 
 function apply_preset_rule(key)
   local preset = RULE_PRESET[key]
-  if not preset then 
-    return 
+  if not preset then
+    return
   end
   rule = preset
   init()
 end
 
 KeyPress.space = key_toggle_pause
-KeyPress.r = key_reset
+KeyPress.r = init
 KeyPress.up = key_rule_up
 KeyPress.down = key_rule_down
 KeyPress.s = key_toggle_seed
 KeyPress.n = key_step_once
 
--- keyboard input
 function love.keypressed(key)
   local handler = KeyPress[key]
   if handler then
